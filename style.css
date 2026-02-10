@@ -1,0 +1,110 @@
+:root{
+  --bg: #ffe6e6;
+  --accent: #d63384;
+  --tile-radius: 10px;
+  --board-radius: 16px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+  color: var(--accent);
+  overflow: hidden;
+  touch-action: manipulation;
+  padding: 18px;
+  gap: 10px;
+}
+
+h1 { margin: 0; font-size: 1.5rem; text-align: center; }
+p  { margin: 0 0 6px; text-align: center; font-size: 0.95rem; padding: 0 10px; }
+
+.toolbar{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+button, .file, .select{
+  background: var(--accent);
+  color: white;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+  font-size: 14px;
+  user-select: none;
+}
+
+.file input{
+  display: none;
+}
+
+.select{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.select select{
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+
+#game-area {
+  position: relative;
+}
+
+#puzzle-container {
+  width: min(86vw, 360px);
+  aspect-ratio: 1 / 1;
+  position: relative;
+  background: #ddd;
+  border: 4px solid #fff;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.20);
+  border-radius: var(--board-radius);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.tile {
+  position: absolute;
+  border-radius: var(--tile-radius);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+  background-repeat: no-repeat;
+  will-change: transform;
+  transition: transform 160ms ease;
+}
+
+.tile:active { transform: scale(0.98); }
+
+#message {
+  display: none;
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(86vw, 320px);
+  height: fit-content;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 22px;
+  border-radius: 18px;
+  box-shadow: 0 14px 40px rgba(0,0,0,0.30);
+  text-align: center;
+  z-index: 10;
+}
