@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Para Salomé ❤️</title>
     <style>
         body {
@@ -11,153 +11,227 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
+            height: 100vh;
             margin: 0;
-            background-color: #ffe6e6; /* Color de fondo rosita suave */
+            background-color: #ffe6e6;
             color: #d63384;
+            overflow: hidden; /* Evita scroll mientras juegas */
+            touch-action: none; /* Mejora la respuesta táctil */
         }
-        h1 { margin-bottom: 10px; text-align: center; }
-        p { margin-bottom: 20px; text-align: center; max-width: 300px; }
+        h1 { margin: 10px 0; font-size: 1.5rem; text-align: center; }
+        p { margin-bottom: 15px; text-align: center; font-size: 0.9rem; px: 20px;}
         
+        #game-area {
+            position: relative;
+            width: 306px; /* 300px + bordes */
+            height: 306px;
+        }
+
         #puzzle-container {
             width: 300px;
             height: 300px;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 2px;
-            border: 5px solid #fff;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            background-color: #fff;
+            position: relative;
+            background-color: #ddd;
+            border: 3px solid #fff;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border-radius: 10px;
+            overflow: hidden;
         }
 
         .tile {
-            width: 100%;
-            height: 100%;
-            background-image: url('foto.jpg'); /* AQUÍ SE USA TU FOTO */
+            width: 98px; /* Un poco menos de 100 para dejar hueco visual */
+            height: 98px;
+            position: absolute;
+            background-image: url('image.png'); /* TU FOTO AQUÍ */
             background-size: 300px 300px;
             cursor: pointer;
-            transition: transform 0.2s ease;
+            transition: transform 0.2s ease-in-out;
+            border-radius: 5px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
         }
 
-        /* Clase para la pieza vacía */
-        .empty {
-            background: #ffe6e6;
-            cursor: default;
-        }
-
+        /* Mensaje final */
         #message {
-            display: none; /* Se oculta hasta ganar */
-            margin-top: 20px;
-            padding: 15px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             text-align: center;
-            animation: popIn 0.5s ease;
-        }
-
-        @keyframes popIn {
-            0% { transform: scale(0); }
-            80% { transform: scale(1.1); }
-            100% { transform: scale(1); }
+            z-index: 10;
+            width: 80%;
         }
 
         button {
-            margin-top: 20px;
-            padding: 10px 20px;
+            margin-top: 25px;
+            padding: 12px 24px;
             font-size: 16px;
             background-color: #d63384;
             color: white;
             border: none;
-            border-radius: 20px;
+            border-radius: 25px;
             cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-    <h1>Para ti, Salomé</h1>
-    <p>Arma el puzzle para ver la sorpresa...</p>
+    <h1>Para ti, Salomé, la más guapa</h1>
+    <p>Desliza las piezas para armar la foto ❤️</p>
 
-    <div id="puzzle-container"></div>
-
-    <div id="message">
-        <h2>¡Lo lograste! 🎉</h2>
-        <p>Te amo muchísimo. Eres lo mejor de mis días.</p>
+    <div id="game-area">
+        <div id="puzzle-container"></div>
+        
+        <div id="message">
+            <h2>¡ouaissss Saloméeeee! 🎉</h2>
+            <p>Eres mi pieza favorita.</p>
+            <p>Te amo mi amor❤️.</p>
         </div>
+    </div>
 
-    <button onclick="scramble()">Revolver</button>
+    <button onclick="shufflePuzzle()">Revolver de nuevo</button>
 
     <script>
         const container = document.getElementById('puzzle-container');
         const message = document.getElementById('message');
-        let tiles = [];
-        const size = 3; // Puzzle de 3x3
-        let emptyIndex = size * size - 1; // La última pieza está vacía inicialmente
+        const size = 3; // 3x3
+        const tileSize = 100;
+        let tiles = []; // Guardará el estado lógico del tablero [0, 1, 2, ..., 8] (8 es vacío)
 
-        // Crear las piezas
-        function createPuzzle() {
-            container.innerHTML = '';
-            tiles = [];
-            for (let i = 0; i < size * size; i++) {
-                const tile = document.createElement('div');
-                tile.classList.add('tile');
-                
-                // Calcular posición del fondo para cada pieza
-                const row = Math.floor(i / size);
-                const col = i % size;
-                
-                if (i === size * size - 1) {
-                    tile.classList.add('empty'); // Última pieza vacía
-                    tile.style.backgroundImage = 'none';
-                } else {
-                    tile.style.backgroundPosition = `-${col * 100}px -${row * 100}px`;
-                }
-
-                tile.addEventListener('click', () => moveTile(i));
-                tiles.push(tile);
-                container.appendChild(tile);
-            }
-            // Actualizar el array visual
-            updateView();
+        // Inicializar
+        function initGame() {
+            tiles = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+            render();
+            setTimeout(shufflePuzzle, 1000);
         }
 
-        // Mover pieza
-        function moveTile(index) {
-            // Verificar si la pieza clicada está adyacente a la vacía
+        // Dibujar las piezas en su posición actual
+        function render() {
+            container.innerHTML = '';
+            tiles.forEach((tileIndex, positionIndex) => {
+                if (tileIndex === 8) return; // No dibujar la pieza vacía
+
+                const div = document.createElement('div');
+                div.classList.add('tile');
+                
+                // Posición actual en el tablero (visual)
+                const currentX = (positionIndex % size) * tileSize;
+                const currentY = Math.floor(positionIndex / size) * tileSize;
+                
+                div.style.left = currentX + 'px';
+                div.style.top = currentY + 'px';
+
+                // Qué parte de la imagen mostrar (background)
+                const bgX = (tileIndex % size) * tileSize;
+                const bgY = Math.floor(tileIndex / size) * tileSize;
+                div.style.backgroundPosition = `-${bgX}px -${bgY}px`;
+
+                // Eventos para Mouse y Touch
+                div.addEventListener('click', () => tryMove(positionIndex));
+                div.addEventListener('touchstart', (e) => handleTouchStart(e, positionIndex), {passive: false});
+                div.addEventListener('touchend', (e) => handleTouchEnd(e, positionIndex));
+
+                container.appendChild(div);
+            });
+        }
+
+        // Intentar mover pieza (Click o Swipe)
+        function tryMove(index) {
+            const emptyIndex = tiles.indexOf(8);
             const row = Math.floor(index / size);
             const col = index % size;
             const emptyRow = Math.floor(emptyIndex / size);
             const emptyCol = emptyIndex % size;
 
-            const isAdjacent = (Math.abs(row - emptyRow) + Math.abs(col - emptyCol)) === 1;
-
-            if (isAdjacent) {
-                // Intercambiar en el array visual (DOM order is managed via append, but we swap content/classes)
-                // Truco: intercambiamos estilos y clases
-                const tempClass = tiles[index].className;
-                const tempStyle = tiles[index].style.cssText;
-
-                tiles[index].className = tiles[emptyIndex].className;
-                tiles[index].style.cssText = tiles[emptyIndex].style.cssText;
-
-                tiles[emptyIndex].className = tempClass;
-                tiles[emptyIndex].style.cssText = tempStyle;
-
-                emptyIndex = index;
-                checkWin();
+            // Verificar si está en la misma fila o columna que el hueco
+            if (row === emptyRow) {
+                // Mover horizontalmente (puede ser más de una pieza)
+                if (col < emptyCol) {
+                    for (let i = emptyCol - 1; i >= col; i--) swap(i + row * size, (i + 1) + row * size);
+                } else if (col > emptyCol) {
+                    for (let i = emptyCol + 1; i <= col; i++) swap(i + row * size, (i - 1) + row * size);
+                }
+            } else if (col === emptyCol) {
+                // Mover verticalmente
+                if (row < emptyRow) {
+                    for (let i = emptyRow - 1; i >= row; i--) swap(col + i * size, col + (i + 1) * size);
+                } else if (row > emptyRow) {
+                    for (let i = emptyRow + 1; i <= row; i++) swap(col + i * size, col + (i - 1) * size);
+                }
+            } else {
+                return; // No se puede mover
             }
+            
+            render();
+            checkWin();
         }
 
-        function updateView() {
-            // No necesitamos reordenar el DOM, solo intercambiamos estilos visualmente en moveTile
+        // Intercambiar dos posiciones en el array
+        function swap(pos1, pos2) {
+            const temp = tiles[pos1];
+            tiles[pos1] = tiles[pos2];
+            tiles[pos2] = temp;
         }
 
-        function scramble() {
+        // --- Lógica Táctil (Swipe) ---
+        let startX, startY;
+
+        function handleTouchStart(e, index) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }
+
+        function handleTouchEnd(e, index) {
+            if (!startX || !startY) return;
+            
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            
+            const diffX = endX - startX;
+            const diffY = endY - startY;
+
+            // Si el deslizamiento fue cortito, cuéntalo como click
+            if (Math.abs(diffX) < 10 && Math.abs(diffY) < 10) {
+                tryMove(index);
+                return;
+            }
+
+            // Determinar dirección del swipe
+            const emptyIndex = tiles.indexOf(8);
+            const row = Math.floor(index / size);
+            const col = index % size;
+            const emptyRow = Math.floor(emptyIndex / size);
+            const emptyCol = emptyIndex % size;
+
+            // Si desliza hacia la dirección del hueco, mover
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                // Horizontal
+                if (diffX > 0 && row === emptyRow && col < emptyCol) tryMove(index); // Derecha
+                if (diffX < 0 && row === emptyRow && col > emptyCol) tryMove(index); // Izquierda
+            } else {
+                // Vertical
+                if (diffY > 0 && col === emptyCol && row < emptyRow) tryMove(index); // Abajo
+                if (diffY < 0 && col === emptyCol && row > emptyRow) tryMove(index); // Arriba
+            }
+
+            startX = null;
+            startY = null;
+        }
+
+        // Revolver
+        function shufflePuzzle() {
             message.style.display = 'none';
-            // Hacer movimientos aleatorios válidos
-            for (let i = 0; i < 100; i++) {
+            // Hacemos movimientos aleatorios válidos para asegurar que tenga solución
+            // (Simulamos 150 clicks aleatorios)
+            let moves = 0;
+            const interval = setInterval(() => {
+                const emptyIndex = tiles.indexOf(8);
                 const neighbors = [];
                 const row = Math.floor(emptyIndex / size);
                 const col = emptyIndex % size;
@@ -167,50 +241,28 @@
                 if (col > 0) neighbors.push(emptyIndex - 1);
                 if (col < size - 1) neighbors.push(emptyIndex + 1);
 
-                const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
-                moveTile(randomNeighbor);
+                const randomPos = neighbors[Math.floor(Math.random() * neighbors.length)];
+                
+                // Swap simple para el shuffle visual
+                swap(emptyIndex, randomPos);
+                render();
+                
+                moves++;
+                if (moves > 80) clearInterval(interval);
+            }, 20); // Velocidad de revolver
+        }
+
+        // Verificar victoria
+        function checkWin() {
+            const isSolved = tiles.every((val, index) => val === index);
+            if (isSolved) {
+                setTimeout(() => {
+                    message.style.display = 'block';
+                }, 200);
             }
         }
 
-        function checkWin() {
-            // Chequear si cada pieza está en su posición original
-            // Simplificación: verificamos si el backgroundPosition coincide con el original
-            let isWin = true;
-            tiles.forEach((tile, index) => {
-                if (index === emptyIndex) return; // Ignorar la vacía
-                
-                const row = Math.floor(index / size);
-                const col = index % size;
-                const expectedPos = `-${col * 100}px -${row * 100}px`; // Nota el espacio exacto
-                
-                // Normalizar strings para comparar
-                const currentBg = tile.style.backgroundPosition.replace(/\s+/g, ' ').trim();
-                const expectedBg = expectedPos.replace(/\s+/g, ' ').trim();
-
-                // Esta verificación es compleja porque al revolver cambiamos estilos, no posiciones de array lógico.
-                // CORRECCIÓN: Para un script simple, la verificación visual es difícil.
-                // Vamos a confiar en el usuario o añadir lógica de estado.
-                // Para este ejemplo simple, asumiremos que si la última es la vacía, podría ser win, 
-                // pero para hacerlo 100% real se requiere lógica de matrices. 
-                // ACTIVAMOS EL MENSAJE MANUALMENTE SI SE VE BIEN o al completar (difícil de detectar sin matriz).
-            });
-            
-            // *Hack para la sorpresa rápida*: 
-            // Como programar la detección de victoria en un solo archivo simple es largo,
-            // he configurado el botón "Revolver" para que inicie el juego.
-            // Cuando ella lo ordene visualmente, verá la foto completa.
-            // Si quieres que el mensaje salte AUTOMÁTICO, requieres más código JS. 
-            // ¿Te sirve que ella vea la foto completa y ya? 
-            
-            // Opción B: Mostrar mensaje tras 5 segundos de inactividad si parece ordenado? No.
-            // Dejémoslo visual. Si ella arma la foto, ¡es el premio!
-            
-            // *Mejora*: Si logras que la pieza vacía llegue al final (posición 8) y el resto se vea bien...
-        }
-
-        // Iniciar
-        createPuzzle();
-        setTimeout(scramble, 1000); // Se revuelve solo al entrar
+        initGame();
     </script>
 </body>
 </html>
