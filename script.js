@@ -165,4 +165,112 @@ function onPointerDown(e) {
     fromIdx,
     axis,
     sign,
-    startX: e
+    startX: e.clientX,
+    startY: e.clientY,
+    moved: 0
+  };
+
+  // put it above others while dragging
+  tileEl.style.zIndex = "5";
+  tileEl.style.transition = "none";
+
+  tileEl.addEventListener("pointermove", onPointerMove);
+  tileEl.addEventListener("pointerup", onPointerUp);
+  tileEl.addEventListener("pointercancel", onPointerUp);
+}
+
+function onPointerMove(e) {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+
+  const dx = e.clientX - drag.startX;
+  const dy = e.clientY - drag.startY;
+
+  // movement only on allowed axis and direction toward empty
+  let delta = (drag.axis === "x") ? dx : dy;
+
+  // block dragging the wrong way
+  if (delta * drag.sign < 0) delta = 0;
+
+  // limit max drag: can’t go beyond the distance to empty
+  const emptyIdx = tiles.indexOf(emptyVal());
+  const a = idxToRC(drag.fromIdx);
+  const b = idxToRC(emptyIdx);
+
+  const maxTiles = (drag.axis === "x")
+    ? Math.abs(b.c - a.c)
+    : Math.abs(b.r - a.r);
+
+  const maxPx = maxTiles * tilePx;
+  delta = Math.min(delta, maxPx);
+
+  drag.moved = delta;
+
+  if (drag.axis === "x") {
+    drag.tileEl.style.transform = `translateX(${delta}px)`;
+  } else {
+    drag.tileEl.style.transform = `translateY(${delta}px)`;
+  }
+}
+
+function onPointerUp(e) {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+
+  const { tileEl, fromIdx, axis, moved } = drag;
+
+  // threshold: must drag at least 35% of a tile
+  const threshold = tilePx * 0.35;
+
+  tileEl.removeEventListener("pointermove", onPointerMove);
+  tileEl.removeEventListener("pointerup", onPointerUp);
+  tileEl.removeEventListener("pointercancel", onPointerUp);
+
+  // restore
+  tileEl.style.zIndex = "";
+  tileEl.style.transition = "transform 160ms ease";
+
+  if (moved >= threshold) {
+    // commit the move (slide line), then re-render clean
+    slideLine(fromIdx);
+    render();
+    if (isSolved()) setTimeout(showWin, 180);
+  } else {
+    // snap back
+    tileEl.style.transform = "translate(0, 0)";
+  }
+
+  drag = null;
+}
+
+// ===== Image loading =====
+function setImageFromFile(file) {
+  const url = URL.createObjectURL(file);
+  imageUrl = url;
+  hideWin();
+  render();
+  shufflePuzzle();
+}
+
+// ===== Init =====
+function init() {
+  tiles = Array.from({ length: size * size }, (_, i) => i);
+  hideWin();
+  render();
+  setTimeout(shufflePuzzle, 250);
+}
+
+// Events
+shuffleBtn.addEventListener("click", shufflePuzzle);
+
+fileInput.addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (file) setImageFromFile(file);
+});
+
+sizeSelect.addEventListener("change", () => {
+  size = parseInt(sizeSelect.value, 10);
+  init();
+});
+
+window.addEventListener("resize", () => render());
+
+init();
