@@ -90,9 +90,17 @@ button, .file, .select{
   background-repeat: no-repeat;
   will-change: transform;
   transition: transform 160ms ease;
+
+  /* 👇 claves para drag/touch */
+  touch-action: none;   /* evita que el navegador “capture” el gesto */
+  user-select: none;    /* evita selección de texto */
+  cursor: grab;         /* se siente arrastrable */
 }
 
-.tile:active { transform: scale(0.98); }
+.tile:active {
+  transform: scale(0.98);
+  cursor: grabbing;
+}
 
 #message {
   display: none;
