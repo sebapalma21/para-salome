@@ -1,6 +1,6 @@
 // ===== Config =====
 const DEFAULT_IMAGE = "imagen.jpg";
-const SHUFFLE_STEPS = 140;
+const DRAG_SNAP_THRESHOLD = 0.55; // qué tan cerca para “pegarse” (0..1)
 
 // ===== DOM =====
 const container = document.getElementById("puzzle-container");
@@ -10,173 +10,136 @@ const fileInput = document.getElementById("fileInput");
 const sizeSelect = document.getElementById("sizeSelect");
 
 // ===== State =====
-let size = parseInt(sizeSelect.value, 10);
-let tiles = []; // values 0..N*N-1, last is empty
+let size = parseInt(sizeSelect.value, 10);     // 3 => 3x3
 let imageUrl = DEFAULT_IMAGE;
-let locked = false;
 
-// board sizing
 let boardPx = 300;
 let tilePx = 100;
 
-function emptyVal() { return size * size - 1; }
-function idxToRC(i) { return { r: Math.floor(i / size), c: i % size }; }
-function rcToIdx(r, c) { return r * size + c; }
-function isSolved() { return tiles.every((v, i) => v === i); }
+// tile id (0..N*N-1) -> cell index (0..N*N-1)
+let tileToCell = new Map();
+// cell index -> tile id
+let cellToTile = new Map();
 
+// dragging
+let drag = null;
+
+// ===== Helpers =====
+function idxToRC(index) {
+  return { r: Math.floor(index / size), c: index % size };
+}
+function rcToIdx(r, c) {
+  return r * size + c;
+}
 function computeSizes() {
   const rect = container.getBoundingClientRect();
   boardPx = Math.round(rect.width);
   tilePx = boardPx / size;
 }
+function hideWin() {
+  message.style.display = "none";
+}
+function showWin() {
+  message.style.display = "block";
+}
+function isSolved() {
+  for (let tile = 0; tile < size * size; tile++) {
+    if (tileToCell.get(tile) !== tile) return false;
+  }
+  return true;
+}
 
-function hideWin() { message.style.display = "none"; }
-function showWin() { message.style.display = "block"; }
+// ===== Init board mapping =====
+function initSolved() {
+  tileToCell.clear();
+  cellToTile.clear();
+  for (let i = 0; i < size * size; i++) {
+    tileToCell.set(i, i);
+    cellToTile.set(i, i);
+  }
+}
+
+function shuffle() {
+  hideWin();
+  // Fisher–Yates sobre las celdas, asignando tiles a cells
+  const cells = Array.from({ length: size * size }, (_, i) => i);
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+
+  tileToCell.clear();
+  cellToTile.clear();
+  for (let tile = 0; tile < size * size; tile++) {
+    const cell = cells[tile];
+    tileToCell.set(tile, cell);
+    cellToTile.set(cell, tile);
+  }
+
+  // evita que quede resuelto al tiro
+  if (isSolved()) shuffle();
+
+  render();
+}
 
 // ===== Rendering =====
 function render() {
   computeSizes();
   container.innerHTML = "";
+
   const bgSize = `${boardPx}px ${boardPx}px`;
 
-  tiles.forEach((tileVal, posIdx) => {
-    if (tileVal === emptyVal()) return;
+  for (let tileId = 0; tileId < size * size; tileId++) {
+    const cellIdx = tileToCell.get(tileId);
+    const { r, c } = idxToRC(cellIdx);
 
-    const { r, c } = idxToRC(posIdx);
-    const div = document.createElement("div");
-    div.className = "tile";
-    div.dataset.posIdx = String(posIdx);
+    const el = document.createElement("div");
+    el.className = "tile";
+    el.dataset.tileId = String(tileId);
 
-    div.style.width = `${tilePx}px`;
-    div.style.height = `${tilePx}px`;
-    div.style.left = `${c * tilePx}px`;
-    div.style.top = `${r * tilePx}px`;
+    el.style.width = `${tilePx}px`;
+    el.style.height = `${tilePx}px`;
+    el.style.left = `${c * tilePx}px`;
+    el.style.top = `${r * tilePx}px`;
 
-    // Image slice
-    const { r: imgR, c: imgC } = idxToRC(tileVal);
-    div.style.backgroundImage = `url("${imageUrl}")`;
-    div.style.backgroundSize = bgSize;
-    div.style.backgroundPosition = `${-imgC * tilePx}px ${-imgR * tilePx}px`;
+    // slice de imagen según tileId (NO según cell)
+    const { r: imgR, c: imgC } = idxToRC(tileId);
+    el.style.backgroundImage = `url("${imageUrl}")`;
+    el.style.backgroundSize = bgSize;
+    el.style.backgroundPosition = `${-imgC * tilePx}px ${-imgR * tilePx}px`;
 
-    // Drag handlers
-    div.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointerdown", onPointerDown);
 
-    container.appendChild(div);
-  });
-}
-
-// ===== Line move (shift until empty reaches fromIdx) =====
-function slideLine(fromIdx) {
-  const emptyIdx = tiles.indexOf(emptyVal());
-  const a = idxToRC(fromIdx);
-  const b = idxToRC(emptyIdx);
-
-  if (a.r !== b.r && a.c !== b.c) return false; // not aligned
-
-  const dr = Math.sign(a.r - b.r);
-  const dc = Math.sign(a.c - b.c);
-
-  let curEmpty = emptyIdx;
-  while (curEmpty !== fromIdx) {
-    const { r, c } = idxToRC(curEmpty);
-    const nextIdx = rcToIdx(r + dr, c + dc);
-    swap(curEmpty, nextIdx);
-    curEmpty = nextIdx;
+    container.appendChild(el);
   }
-  return true;
 }
 
-function swap(i, j) {
-  const t = tiles[i];
-  tiles[i] = tiles[j];
-  tiles[j] = t;
-}
-
-// ===== Shuffle (valid moves -> always solvable) =====
-function getAlignedCandidates(emptyIdx) {
-  const { r, c } = idxToRC(emptyIdx);
-  const out = [];
-  for (let cc = 0; cc < size; cc++) if (cc !== c) out.push(rcToIdx(r, cc));
-  for (let rr = 0; rr < size; rr++) if (rr !== r) out.push(rcToIdx(rr, c));
-  return out;
-}
-
-function shufflePuzzle() {
-  hideWin();
-  locked = true;
-
-  let steps = 0;
-  const tick = () => {
-    const emptyIdx = tiles.indexOf(emptyVal());
-    const cand = getAlignedCandidates(emptyIdx);
-    const pick = cand[Math.floor(Math.random() * cand.length)];
-    slideLine(pick);
-    render();
-
-    steps++;
-    if (steps < SHUFFLE_STEPS) {
-      requestAnimationFrame(tick);
-    } else {
-      if (isSolved()) {
-        steps = 0;
-        requestAnimationFrame(tick);
-        return;
-      }
-      locked = false;
-    }
-  };
-  requestAnimationFrame(tick);
-}
-
-// ===== Drag logic (Pointer Events) =====
-let drag = null;
-
+// ===== Drag & Drop =====
 function onPointerDown(e) {
-  if (locked) return;
+  const el = e.currentTarget;
+  const tileId = parseInt(el.dataset.tileId, 10);
 
-  const tileEl = e.currentTarget;
-  const fromIdx = parseInt(tileEl.dataset.posIdx, 10);
-  const emptyIdx = tiles.indexOf(emptyVal());
+  el.setPointerCapture(e.pointerId);
 
-  const a = idxToRC(fromIdx);
-  const b = idxToRC(emptyIdx);
-
-  // must be aligned to drag toward empty
-  const alignedRow = a.r === b.r;
-  const alignedCol = a.c === b.c;
-  if (!alignedRow && !alignedCol) return;
-
-  // Direction allowed: only toward the empty
-  // axis: 'x' or 'y', sign: +1 or -1 in pixel direction
-  let axis, sign;
-  if (alignedRow) {
-    axis = "x";
-    sign = (b.c > a.c) ? +1 : -1; // empty is right => drag right
-  } else {
-    axis = "y";
-    sign = (b.r > a.r) ? +1 : -1; // empty is down => drag down
-  }
-
-  tileEl.setPointerCapture(e.pointerId);
+  const startLeft = parseFloat(el.style.left);
+  const startTop = parseFloat(el.style.top);
 
   drag = {
     pointerId: e.pointerId,
-    tileEl,
-    fromIdx,
-    axis,
-    sign,
+    el,
+    tileId,
     startX: e.clientX,
     startY: e.clientY,
-    moved: 0
+    startLeft,
+    startTop
   };
 
-  // put it above others while dragging
-  tileEl.style.zIndex = "5";
-  tileEl.style.transition = "none";
+  el.style.zIndex = "10";
+  el.style.transition = "none";
 
-  tileEl.addEventListener("pointermove", onPointerMove);
-  tileEl.addEventListener("pointerup", onPointerUp);
-  tileEl.addEventListener("pointercancel", onPointerUp);
+  el.addEventListener("pointermove", onPointerMove);
+  el.addEventListener("pointerup", onPointerUp);
+  el.addEventListener("pointercancel", onPointerUp);
 }
 
 function onPointerMove(e) {
@@ -185,58 +148,95 @@ function onPointerMove(e) {
   const dx = e.clientX - drag.startX;
   const dy = e.clientY - drag.startY;
 
-  // movement only on allowed axis and direction toward empty
-  let delta = (drag.axis === "x") ? dx : dy;
+  // mover libre
+  drag.el.style.left = `${drag.startLeft + dx}px`;
+  drag.el.style.top = `${drag.startTop + dy}px`;
+}
 
-  // block dragging the wrong way
-  if (delta * drag.sign < 0) delta = 0;
+function nearestCellFromElement(el) {
+  const left = parseFloat(el.style.left);
+  const top = parseFloat(el.style.top);
 
-  // limit max drag: can’t go beyond the distance to empty
-  const emptyIdx = tiles.indexOf(emptyVal());
-  const a = idxToRC(drag.fromIdx);
-  const b = idxToRC(emptyIdx);
+  // centro de la pieza
+  const cx = left + tilePx / 2;
+  const cy = top + tilePx / 2;
 
-  const maxTiles = (drag.axis === "x")
-    ? Math.abs(b.c - a.c)
-    : Math.abs(b.r - a.r);
+  let c = Math.floor(cx / tilePx);
+  let r = Math.floor(cy / tilePx);
 
-  const maxPx = maxTiles * tilePx;
-  delta = Math.min(delta, maxPx);
+  // clamp
+  c = Math.max(0, Math.min(size - 1, c));
+  r = Math.max(0, Math.min(size - 1, r));
 
-  drag.moved = delta;
+  return rcToIdx(r, c);
+}
 
-  if (drag.axis === "x") {
-    drag.tileEl.style.transform = `translateX(${delta}px)`;
-  } else {
-    drag.tileEl.style.transform = `translateY(${delta}px)`;
-  }
+function snapToCell(el, cellIdx) {
+  const { r, c } = idxToRC(cellIdx);
+  el.style.left = `${c * tilePx}px`;
+  el.style.top = `${r * tilePx}px`;
 }
 
 function onPointerUp(e) {
   if (!drag || e.pointerId !== drag.pointerId) return;
 
-  const { tileEl, fromIdx, axis, moved } = drag;
+  const { el, tileId } = drag;
 
-  // threshold: must drag at least 35% of a tile
-  const threshold = tilePx * 0.35;
+  el.removeEventListener("pointermove", onPointerMove);
+  el.removeEventListener("pointerup", onPointerUp);
+  el.removeEventListener("pointercancel", onPointerUp);
 
-  tileEl.removeEventListener("pointermove", onPointerMove);
-  tileEl.removeEventListener("pointerup", onPointerUp);
-  tileEl.removeEventListener("pointercancel", onPointerUp);
+  el.style.zIndex = "";
+  el.style.transition = "left 160ms ease, top 160ms ease";
 
-  // restore
-  tileEl.style.zIndex = "";
-  tileEl.style.transition = "transform 160ms ease";
+  // decidir celda destino
+  const targetCell = nearestCellFromElement(el);
 
-  if (moved >= threshold) {
-    // commit the move (slide line), then re-render clean
-    slideLine(fromIdx);
-    render();
-    if (isSolved()) setTimeout(showWin, 180);
-  } else {
-    // snap back
-    tileEl.style.transform = "translate(0, 0)";
+  // chequeo de “cercanía” (para que no se pegue raro si sueltas lejos)
+  const { r: tr, c: tc } = idxToRC(targetCell);
+  const targetLeft = tc * tilePx;
+  const targetTop = tr * tilePx;
+
+  const curLeft = parseFloat(el.style.left);
+  const curTop = parseFloat(el.style.top);
+
+  const dist = Math.hypot(curLeft - targetLeft, curTop - targetTop);
+  const maxDist = tilePx * DRAG_SNAP_THRESHOLD;
+
+  // si está muy lejos, vuelve a su celda original
+  if (dist > maxDist) {
+    const originalCell = tileToCell.get(tileId);
+    snapToCell(el, originalCell);
+    drag = null;
+    return;
   }
+
+  // si la celda está ocupada, swap
+  const otherTile = cellToTile.get(targetCell);
+  const fromCell = tileToCell.get(tileId);
+
+  if (otherTile !== undefined && otherTile !== tileId) {
+    // swap mappings
+    tileToCell.set(tileId, targetCell);
+    tileToCell.set(otherTile, fromCell);
+
+    cellToTile.set(targetCell, tileId);
+    cellToTile.set(fromCell, otherTile);
+
+    // mover visualmente las dos piezas
+    snapToCell(el, targetCell);
+
+    // encontrar el elemento del otro tile y moverlo
+    const otherEl = container.querySelector(`.tile[data-tile-id="${otherTile}"]`);
+    if (otherEl) snapToCell(otherEl, fromCell);
+  } else {
+    // celda “libre” (en teoría no pasa, pero por seguridad)
+    tileToCell.set(tileId, targetCell);
+    cellToTile.set(targetCell, tileId);
+    snapToCell(el, targetCell);
+  }
+
+  if (isSolved()) setTimeout(showWin, 180);
 
   drag = null;
 }
@@ -247,19 +247,19 @@ function setImageFromFile(file) {
   imageUrl = url;
   hideWin();
   render();
-  shufflePuzzle();
+  shuffle();
 }
 
 // ===== Init =====
 function init() {
-  tiles = Array.from({ length: size * size }, (_, i) => i);
+  initSolved();
   hideWin();
   render();
-  setTimeout(shufflePuzzle, 250);
+  setTimeout(shuffle, 200);
 }
 
 // Events
-shuffleBtn.addEventListener("click", shufflePuzzle);
+shuffleBtn.addEventListener("click", shuffle);
 
 fileInput.addEventListener("change", (e) => {
   const file = e.target.files?.[0];
